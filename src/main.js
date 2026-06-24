@@ -5,11 +5,16 @@ import { mountReader } from './reader.js';
 
 const app = document.getElementById('app');
 
+// Object URLs for the visible cover thumbnails; revoked on each re-render.
+let coverUrls = [];
+
 async function showLibrary() {
   if (mountReader._cleanup) {
     mountReader._cleanup();
     mountReader._cleanup = null;
   }
+  coverUrls.forEach(URL.revokeObjectURL);
+  coverUrls = [];
   const books = await listBooks();
   app.innerHTML = `
     <div class="library">
@@ -56,10 +61,16 @@ async function showLibrary() {
 
 function bookCard(b) {
   const modeTag = b.canReflow === false ? '掃描版' : '可重排';
+  let coverInner = `<span>${escapeHtml(initials(b.title))}</span>`;
+  if (b.cover) {
+    const url = URL.createObjectURL(b.cover);
+    coverUrls.push(url);
+    coverInner = `<img src="${url}" alt="" loading="lazy">`;
+  }
   return `
     <div class="book-card" data-id="${b.id}">
       <button class="del-btn" data-id="${b.id}" aria-label="刪除">×</button>
-      <div class="book-cover"><span>${escapeHtml(initials(b.title))}</span></div>
+      <div class="book-cover">${coverInner}</div>
       <div class="book-meta">
         <div class="book-title">${escapeHtml(b.title)}</div>
         <div class="book-sub">${b.numPages} 頁 · ${modeTag}</div>
@@ -89,6 +100,7 @@ async function handleUpload(e) {
       numPages: parsed.numPages,
       defaultMode: parsed.defaultMode,
       canReflow: parsed.canReflow,
+      cover: parsed.cover, // small first-page thumbnail blob
       addedAt: Date.now(),
       progress: null,
     };
@@ -126,6 +138,12 @@ function escapeHtml(s) {
 // Register the PWA service worker (injected by vite-plugin-pwa).
 if ('serviceWorker' in navigator) {
   import('virtual:pwa-register').then(({ registerSW }) => registerSW({ immediate: true }));
+}
+
+// Ask the browser to keep our stored books from being evicted (esp. on iOS,
+// where non-persistent storage can be cleared after periods of inactivity).
+if (navigator.storage?.persist) {
+  navigator.storage.persist().catch(() => {});
 }
 
 showLibrary();

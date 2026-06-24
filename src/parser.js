@@ -43,12 +43,21 @@ export async function parsePdf(buffer, onProgress = () => {}) {
   const textChapters = isScanned ? [] : buildTextChapters(pageTexts, chapterMarks, numPages);
   const pageChapters = buildPageChapters(chapterMarks, numPages);
 
+  // Small thumbnail of the first page, used as the cover in the library.
+  let cover = null;
+  try {
+    cover = await renderPageToBlob(pdf, 1, 320);
+  } catch {
+    /* cover is optional */
+  }
+
   return {
     defaultMode: isScanned ? 'page' : 'text',
     canReflow: !isScanned,
     numPages,
     textChapters,
     pageChapters,
+    cover,
   };
 }
 
